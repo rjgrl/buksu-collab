@@ -17,10 +17,25 @@ export async function writeAudit(
     ipAddress?: string | null;
   },
 ) {
-  // TODO(PLAKY-AUD-001 - db.auditLog.create({ data: { ... } }); must never throw into
-  // the request path when `action` is missing an entity.
-  void db;
-  void input;
+  if (!input.action || !input.entity) {
+    return;
+  }
+
+  try {
+    await db.auditLog.create({
+      data: {
+        actorId: input.actorId ?? null,
+        action: input.action,
+        entity: input.entity,
+        entityId: input.entityId ?? null,
+        summary: input.summary ?? "",
+        metadata: input.metadata ?? undefined,
+        ipAddress: input.ipAddress ?? null,
+      },
+    });
+  } catch {
+    // Audit must never break the request path.
+  }
 }
 
 // TODO(PLAKY-RBAC): PLAKY-RBAC-009 - implement the permission predicate.

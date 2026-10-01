@@ -14,24 +14,42 @@ import { orpc } from "@/utils/orpc";
 // Contract: orpc.auth.me query with a 30s staleTime so permission-gated navigation does not
 // flicker, and so a revoked role disappears within 30 seconds.
 export function useSession() {
-  void orpc;
-  void useQuery;
-  throw new Error("TODO(PLAKY-WEB-003): implement useSession");
+  return useQuery({
+    ...orpc.auth.me.queryOptions(),
+    staleTime: 30_000,
+  });
 }
 
 // TODO(PLAKY-RBAC): PLAKY-RBAC-015 - implement `can`. Must treat an undefined permission
 // list as "no access" so the UI hides controls while the session is still loading.
 export function can(permissions: string[] | undefined, permission: string) {
-  void permissions;
-  void permission;
-  throw new Error("TODO(PLAKY-RBAC-015): implement can");
+  if (!permissions) {
+    return false;
+  }
+  return permissions.includes(permission);
 }
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-026 - implement postJson.
 // Contract: POST JSON with credentials included; on a non-2xx response throw an Error
 // carrying the server's `error` field so callers can show it verbatim in a toast.
 export async function postJson<T>(url: string, body: unknown) {
-  void url;
-  void body;
-  throw new Error("TODO(PLAKY-AUTH-026): implement postJson");
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  let payload: { error?: string } & T = {} as { error?: string } & T;
+  try {
+    payload = (await response.json()) as { error?: string } & T;
+  } catch {
+    // Non-JSON error bodies still become a generic failure below.
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed.");
+  }
+
+  return payload;
 }

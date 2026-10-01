@@ -1,7 +1,9 @@
+import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
 import { requirePermission } from "../index";
 import { departmentInputSchema, facultyInputSchema, programInputSchema } from "../validation";
+import { withNotDeleted } from "@Alumni-Tracking-Ss/db";
 
 // Academic structure module: Department <- Program, Department <- Faculty.
 // Every procedure is guarded by requirePermission, so the permission key below is the
@@ -13,16 +15,66 @@ export const departmentsRouter = {
   // soft-delete filter, `_count` of programs and faculty, ordered by name.
   list: requirePermission("departments.read")
     .input(z.object({ search: z.string().optional() }).optional())
-    .handler(async () => {
-      throw new Error("TODO(PLAKY-ACAD-003): implement departments.list");
+    .handler(async ({ context, input }) => {
+      const search = input?.search?.trim();
+      const searchFilter = search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { code: { contains: search } },
+              { name: { contains: search.toUpperCase() } },
+              { code: { contains: search.toUpperCase() } },
+              { name: { contains: search.toLowerCase() } },
+              { code: { contains: search.toLowerCase() } },
+            ],
+          }
+        : undefined;
+
+      return context.db.department.findMany({
+        where: withNotDeleted(searchFilter),
+        orderBy: { name: "asc" },
+        include: {
+          _count: {
+            select: {
+              programs: { where: withNotDeleted() },
+              facultyDepartments: true,
+            },
+          },
+        },
+      });
     }),
 
   // TODO(PLAKY-ACAD-003 - load one department with its programs and faculty assignments;
   // throw NOT_FOUND when missing.
   get: requirePermission("departments.read")
     .input(z.object({ id: z.string() }))
-    .handler(async () => {
-      throw new Error("TODO(PLAKY-ACAD-003): implement departments.get");
+    .handler(async ({ context, input }) => {
+      const department = await context.db.department.findFirst({
+        where: withNotDeleted({ id: input.id }),
+        include: {
+          programs: {
+            where: withNotDeleted(),
+            orderBy: { name: "asc" },
+          },
+          facultyDepartments: {
+            include: {
+              faculty: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+
+      if (!department) {
+        throw new ORPCError("NOT_FOUND", { message: "Department not found." });
+      }
+
+      return {
+        ...department,
+        faculties: department.facultyDepartments
+          .map((row) => row.faculty)
+          .filter((faculty) => !faculty.deletedAt),
+      };
     }),
 
   // TODO(PLAKY-ACAD-003 - create with an upper-cased code, then write an audit entry.
