@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 
+import type { Context } from "../context";
 import { writeAudit } from "../audit";
 import { publicProcedure, requirePermission } from "../index";
 import { isConfigured, isIntegrationEnabled } from "../integrations/registry";
