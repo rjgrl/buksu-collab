@@ -1,10 +1,10 @@
 import type { Database } from "@Alumni-Tracking-Ss/db";
 import type { PermissionKey } from "@Alumni-Tracking-Ss/db";
 
-// TODO(PLAKY-AUDIT): PLAKY-AUD-001 - implement the audit write.
-// Contract: one AuditLog row per mutation, with actorId, action, entity, entityId,
-// human-readable summary, optional JSON metadata, and the caller IP.
+// One AuditLog row per mutation, with actorId, action, entity, entityId,
+// a human-readable summary, optional JSON metadata, and the caller IP.
 // Every write procedure in packages/api/src/routers/* must call this.
+// A missing entity is ignored so the helper never throws into the request path.
 export async function writeAudit(
   db: Database,
   input: {
@@ -17,10 +17,26 @@ export async function writeAudit(
     ipAddress?: string | null;
   },
 ) {
-  // TODO(PLAKY-AUD-001 - db.auditLog.create({ data: { ... } }); must never throw into
-  // the request path when `action` is missing an entity.
-  void db;
-  void input;
+  // A missing entity is a caller bug, not a failed mutation. Skip the write instead of
+  // throwing into the request path.
+  if (!input.entity.trim()) {
+    return;
+  }
+
+  const metadata =
+    input.metadata == null ? undefined : (JSON.parse(JSON.stringify(input.metadata)) as object);
+
+  await db.auditLog.create({
+    data: {
+      actorId: input.actorId || null,
+      action: input.action,
+      entity: input.entity,
+      entityId: input.entityId || null,
+      summary: input.summary ?? "",
+      metadata,
+      ipAddress: input.ipAddress || null,
+    },
+  });
 }
 
 // TODO(PLAKY-RBAC): PLAKY-RBAC-009 - implement the permission predicate.
