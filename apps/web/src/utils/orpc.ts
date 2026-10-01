@@ -2,7 +2,8 @@ import type { AppRouterClient } from "@Alumni-Tracking-Ss/api/routers/index";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { ENV } from "../env";
 
@@ -16,11 +17,26 @@ import { ENV } from "../env";
 // target must stay `${VITE_SERVER_URL}/rpc`, which is what the dev proxy in vite.config.ts
 // forwards to the Hono server.
 
-// TODO(PLAKY-WEB): PLAKY-WEB-002 - implement createQueryClient.
 // Contract: every failed query raises a toast with a retry action that invalidates the
 // query, so no screen has to render its own global error state.
 export function createQueryClient() {
-  throw new Error("TODO(PLAKY-WEB-002): implement createQueryClient");
+  const client = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error, query) => {
+        const message = error instanceof Error && error.message ? error.message : "Request failed";
+        toast.error(message, {
+          action: {
+            label: "Retry",
+            onClick: () => {
+              void client.invalidateQueries({ queryKey: query.queryKey });
+            },
+          },
+        });
+      },
+    }),
+  });
+
+  return client;
 }
 
 export const queryClient = createQueryClient();

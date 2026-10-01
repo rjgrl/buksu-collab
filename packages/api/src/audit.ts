@@ -17,10 +17,24 @@ export async function writeAudit(
     ipAddress?: string | null;
   },
 ) {
-  // TODO(PLAKY-AUD-001 - db.auditLog.create({ data: { ... } }); must never throw into
-  // the request path when `action` is missing an entity.
-  void db;
-  void input;
+  // A write with no action or no entity is a caller bug. Drop it instead of failing the
+  // mutation that already succeeded.
+  if (!input.action.trim() || !input.entity.trim()) {
+    return;
+  }
+
+  await db.auditLog.create({
+    data: {
+      actorId: input.actorId ? input.actorId : null,
+      action: input.action,
+      entity: input.entity,
+      entityId: input.entityId ?? null,
+      summary: input.summary ?? "",
+      ipAddress: input.ipAddress ?? null,
+      metadata:
+        input.metadata == null ? undefined : JSON.parse(JSON.stringify(input.metadata)),
+    },
+  });
 }
 
 // TODO(PLAKY-RBAC): PLAKY-RBAC-009 - implement the permission predicate.

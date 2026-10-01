@@ -10,21 +10,19 @@ import { orpc } from "@/utils/orpc";
 //
 // `postJson` exists for the raw /api/auth/* routes, which are not part of the oRPC router.
 
-// TODO(PLAKY-WEB): PLAKY-WEB-003 - implement useSession.
 // Contract: orpc.auth.me query with a 30s staleTime so permission-gated navigation does not
 // flicker, and so a revoked role disappears within 30 seconds.
 export function useSession() {
-  void orpc;
-  void useQuery;
-  throw new Error("TODO(PLAKY-WEB-003): implement useSession");
+  return useQuery({
+    ...orpc.auth.me.queryOptions(),
+    staleTime: 30_000,
+  });
 }
 
-// TODO(PLAKY-RBAC): PLAKY-RBAC-015 - implement `can`. Must treat an undefined permission
-// list as "no access" so the UI hides controls while the session is still loading.
+// Treat an undefined permission list as "no access" so the UI hides controls while the
+// session is still loading.
 export function can(permissions: string[] | undefined, permission: string) {
-  void permissions;
-  void permission;
-  throw new Error("TODO(PLAKY-RBAC-015): implement can");
+  return permissions?.includes(permission) ?? false;
 }
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-026 - implement postJson.
