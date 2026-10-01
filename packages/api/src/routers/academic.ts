@@ -1,9 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
+import { withNotDeleted } from "@Alumni-Tracking-Ss/db";
 
+import { writeAudit } from "../audit";
 import { requirePermission } from "../index";
 import { departmentInputSchema, facultyInputSchema, programInputSchema } from "../validation";
-import { withNotDeleted } from "@Alumni-Tracking-Ss/db";
 
 // Academic structure module: Department <- Program, Department <- Faculty.
 // Every procedure is guarded by requirePermission, so the permission key below is the
@@ -80,22 +81,103 @@ export const departmentsRouter = {
   // TODO(PLAKY-ACAD-003 - create with an upper-cased code, then write an audit entry.
   create: requirePermission("departments.write")
     .input(departmentInputSchema)
-    .handler(async () => {
-      throw new Error("TODO(PLAKY-ACAD-003): implement departments.create");
+    .handler(async ({ context, input }) => {
+      const code = input.code.trim().toUpperCase();
+      const existing = await context.db.department.findUnique({ where: { code } });
+      if (existing) {
+        throw new ORPCError("CONFLICT", {
+          message: `Department code "${code}" is already in use.`,
+        });
+      }
+
+      const department = await context.db.department.create({
+        data: {
+          code,
+          name: input.name.trim(),
+          description: input.description?.trim() ?? "",
+        },
+      });
+
+      await writeAudit(context.db, {
+        actorId: context.user.id,
+        action: "departments.create",
+        entity: "department",
+        entityId: department.id,
+        summary: `Created department ${department.code}`,
+        ipAddress: context.ipAddress,
+      });
+
+      return department;
     }),
 
   // TODO(PLAKY-ACAD-003 - update by id, then write an audit entry.
   update: requirePermission("departments.write")
     .input(departmentInputSchema.extend({ id: z.string() }))
-    .handler(async () => {
-      throw new Error("TODO(PLAKY-ACAD-003): implement departments.update");
+    .handler(async ({ context, input }) => {
+      const current = await context.db.department.findFirst({
+        where: withNotDeleted({ id: input.id }),
+      });
+      if (!current) {
+        throw new ORPCError("NOT_FOUND", { message: "Department not found." });
+      }
+
+      const code = input.code.trim().toUpperCase();
+      if (code !== current.code) {
+        const clash = await context.db.department.findUnique({ where: { code } });
+        if (clash) {
+          throw new ORPCError("CONFLICT", {
+            message: `Department code "${code}" is already in use.`,
+          });
+        }
+      }
+
+      const department = await context.db.department.update({
+        where: { id: input.id },
+        data: {
+          code,
+          name: input.name.trim(),
+          description: input.description?.trim() ?? "",
+        },
+      });
+
+      await writeAudit(context.db, {
+        actorId: context.user.id,
+        action: "departments.update",
+        entity: "department",
+        entityId: department.id,
+        summary: `Updated department ${department.code}`,
+        ipAddress: context.ipAddress,
+      });
+
+      return department;
     }),
 
   // TODO(PLAKY-ACAD-003 - soft delete (set deletedAt), then write an audit entry.
   delete: requirePermission("departments.delete")
     .input(z.object({ id: z.string() }))
-    .handler(async () => {
-      throw new Error("TODO(PLAKY-ACAD-003): implement departments.delete");
+    .handler(async ({ context, input }) => {
+      const current = await context.db.department.findFirst({
+        where: withNotDeleted({ id: input.id }),
+      });
+      if (!current) {
+        throw new ORPCError("NOT_FOUND", { message: "Department not found." });
+      }
+
+      const department = await context.db.department.update({
+        where: { id: input.id },
+        data: { deletedAt: new Date() },
+      });
+
+      await writeAudit(context.db, {
+        actorId: context.user.id,
+        action: "departments.delete",
+        entity: "department",
+        entityId: department.id,
+        summary: `Soft-deleted department ${department.code}`,
+        ipAddress: context.ipAddress,
+      });
+
+      return { ok: true as const };
     }),
 };
 

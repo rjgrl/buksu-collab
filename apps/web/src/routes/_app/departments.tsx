@@ -1,30 +1,41 @@
-import { useQuery } from "@tanstack/react-query";
+import { Input } from "@Alumni-Tracking-Ss/ui/components/input";
+import { Textarea } from "@Alumni-Tracking-Ss/ui/components/textarea";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
-import { DataTable, QuietButton, TableCell, TableRow } from "@/components/data-table";
-import { EmptyState, PageHeader } from "@/components/page-header";
-import { useSession } from "@/lib/session";
-import { orpc } from "@/utils/orpc";
+import { DataTable, QuietButton, RowActions, TableCell, TableRow } from "@/components/data-table";
+import { FieldGroup } from "@/components/field";
+import { EmptyState, FormField, PageHeader, PrimaryButton } from "@/components/page-header";
+import { can, useSession } from "@/lib/session";
+import { client, orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_app/departments")({
   component: DepartmentsPage,
 });
 
+type FormState = {
+  code: string;
+  name: string;
+  description: string;
+};
+
+const emptyForm: FormState = { code: "", name: "", description: "" };
+
 // TODO(PLAKY-ACADEMIC): PLAKY-ACAD-006 - implement the Departments screen.
-//
-// Required behaviour (see docs/academic-structure/manage-departments.md):
-//   - DataTable of code, name, program count, faculty count; search box wired to
-//     orpc.departments.list
-//   - create and edit forms for code / name / description (code is upper-cased server-side)
-//   - delete is a soft delete and must read as such in the UI; it requires
-//     departments.delete, while create and edit require departments.write
-//
-// ALM-007 scope for this pass: list + open (programs and assigned faculties).
 function DepartmentsPage() {
-  useSession();
+  const session = useSession();
+  const queryClient = useQueryClient();
+  const permissions = session.data?.permissions;
+  const canWrite = can(permissions, "departments.write");
+  const canDelete = can(permissions, "departments.delete");
+
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState<FormState>(emptyForm);
 
   const listQuery = useQuery(
     orpc.departments.list.queryOptions({
@@ -39,15 +50,163 @@ function DepartmentsPage() {
     enabled: Boolean(selectedId),
   });
 
+  async function invalidateDepartments() {
+    await queryClient.invalidateQueries({ queryKey: orpc.departments.key() });
+  }
+
+  const createMutation = useMutation({
+    mutationFn: (input: FormState) =>
+      client.departments.create({
+        code: input.code,
+        name: input.name,
+        description: input.description || undefined,
+      }),
+    onSuccess: async () => {
+      toast.success("Department created");
+      setShowCreate(false);
+      setForm(emptyForm);
+      await invalidateDepartments();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (input: FormState & { id: string }) =>
+      client.departments.update({
+        id: input.id,
+        code: input.code,
+        name: input.name,
+        description: input.description || undefined,
+      }),
+    onSuccess: async () => {
+      toast.success("Department updated");
+      setEditingId(null);
+      setForm(emptyForm);
+      await invalidateDepartments();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => client.departments.delete({ id }),
+    onSuccess: async (_data, id) => {
+      toast.success("Department soft-deleted");
+      if (selectedId === id) {
+        setSelectedId(null);
+      }
+      if (editingId === id) {
+        setEditingId(null);
+        setForm(emptyForm);
+      }
+      await invalidateDepartments();
+    },
+  });
+
   const departments = listQuery.data ?? [];
   const detail = detailQuery.data;
+  const formPending = createMutation.isPending || updateMutation.isPending;
+
+  function startCreate() {
+    setShowCreate(true);
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
+  function startEdit(department: { id: string; code: string; name: string; description: string }) {
+    setShowCreate(false);
+    setEditingId(department.id);
+    setSelectedId(department.id);
+    setForm({
+      code: department.code,
+      name: department.name,
+      description: department.description ?? "",
+    });
+  }
+
+  function cancelForm() {
+    setShowCreate(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, ...form });
+      return;
+    }
+    createMutation.mutate(form);
+  }
+
+  function onDelete(id: string, code: string) {
+    const confirmed = window.confirm(
+      `Soft-delete department ${code}? It will be hidden from lists but not permanently removed.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    deleteMutation.mutate(id);
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Departments"
         description="Browse academic departments, their programs, and assigned faculties."
+        actions={
+          canWrite ? (
+            <QuietButton type="button" onClick={startCreate}>
+              Add department
+            </QuietButton>
+          ) : null
+        }
       />
+
+      {showCreate || editingId ? (
+        <section className="border border-border/70 p-4">
+          <h2 className="mb-4 text-sm font-medium">
+            {editingId ? "Edit department" : "Create department"}
+          </h2>
+          <form onSubmit={onSubmit}>
+            <FieldGroup>
+              <FormField id="dept-code" label="Code">
+                <Input
+                  id="dept-code"
+                  value={form.code}
+                  onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="IT"
+                  required
+                />
+              </FormField>
+              <FormField id="dept-name" label="Name">
+                <Input
+                  id="dept-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Information Technology"
+                  required
+                />
+              </FormField>
+              <FormField id="dept-description" label="Description">
+                <Textarea
+                  id="dept-description"
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  rows={3}
+                />
+              </FormField>
+              <div className="flex flex-wrap gap-2">
+                <PrimaryButton type="submit" pending={formPending}>
+                  {editingId ? "Save changes" : "Create department"}
+                </PrimaryButton>
+                <QuietButton type="button" onClick={cancelForm}>
+                  Cancel
+                </QuietButton>
+              </div>
+            </FieldGroup>
+          </form>
+        </section>
+      ) : null}
 
       <DataTable
         headers={["Code", "Name", "Programs", "Faculties", ""]}
@@ -73,9 +232,25 @@ function DepartmentsPage() {
               <TableCell>{department._count.programs}</TableCell>
               <TableCell>{department._count.facultyDepartments}</TableCell>
               <TableCell>
-                <QuietButton type="button" onClick={() => setSelectedId(department.id)}>
-                  Open
-                </QuietButton>
+                <RowActions>
+                  <QuietButton type="button" onClick={() => setSelectedId(department.id)}>
+                    Open
+                  </QuietButton>
+                  {canWrite ? (
+                    <QuietButton type="button" onClick={() => startEdit(department)}>
+                      Edit
+                    </QuietButton>
+                  ) : null}
+                  {canDelete ? (
+                    <QuietButton
+                      type="button"
+                      onClick={() => onDelete(department.id, department.code)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      Soft delete
+                    </QuietButton>
+                  ) : null}
+                </RowActions>
               </TableCell>
             </TableRow>
           ))
@@ -93,9 +268,25 @@ function DepartmentsPage() {
                 <p className="mt-1 text-sm text-muted-foreground">{detail.description}</p>
               ) : null}
             </div>
-            <QuietButton type="button" onClick={() => setSelectedId(null)}>
-              Close
-            </QuietButton>
+            <RowActions>
+              {canWrite && detail ? (
+                <QuietButton type="button" onClick={() => startEdit(detail)}>
+                  Edit
+                </QuietButton>
+              ) : null}
+              {canDelete && detail ? (
+                <QuietButton
+                  type="button"
+                  onClick={() => onDelete(detail.id, detail.code)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Soft delete
+                </QuietButton>
+              ) : null}
+              <QuietButton type="button" onClick={() => setSelectedId(null)}>
+                Close
+              </QuietButton>
+            </RowActions>
           </div>
 
           {detailQuery.isLoading ? (
