@@ -39,12 +39,26 @@ export type IntegrationStatus = {
 // TODO(PLAKY-INT-006 - read IntegrationSetting rows, then map every key in INTEGRATION_KEYS
 // to an IntegrationStatus. A key with no stored row defaults to enabled = true.
 export async function listIntegrations(db: Database, env: IntegrationEnv): Promise<IntegrationStatus[]> {
-  void db;
-  void env;
-  // TODO(PLAKY-INT-006 - each entry is built from isConfigured(key, env) and summarize(key, mode).
-  void isConfigured;
-  void summarize;
-  throw new Error("TODO(PLAKY-INT-006): implement listIntegrations");
+  const rows = await db.integrationSetting.findMany();
+  const enabledByKey = new Map(rows.map((row) => [row.key, row.enabled]));
+
+  return INTEGRATION_KEYS.map((key) => {
+    const enabled = enabledByKey.get(key) ?? true;
+    const configured = isConfigured(key, env);
+    const mode: IntegrationStatus["mode"] = !enabled
+      ? "disabled"
+      : configured
+        ? "live"
+        : "fallback";
+
+    return {
+      key,
+      enabled,
+      configured,
+      mode,
+      summary: summarize(key, mode),
+    };
+  });
 }
 
 // TODO(PLAKY-INT-006 - declarative contract: which env keys make each module "configured".
@@ -97,5 +111,6 @@ function summarize(key: IntegrationKey, mode: IntegrationStatus["mode"]) {
 // TODO(PLAKY-INT-006 - single-module check used by the auth and webhook paths. A missing
 // row means enabled, matching the seed defaults.
 export async function isIntegrationEnabled(db: Database, key: IntegrationKey) {
-  throw new Error("TODO(PLAKY-INT-006): implement isIntegrationEnabled");
+  const row = await db.integrationSetting.findUnique({ where: { key } });
+  return row?.enabled ?? true;
 }

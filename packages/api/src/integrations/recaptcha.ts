@@ -13,7 +13,32 @@ export async function verifyRecaptcha(
   env: IntegrationEnv,
   input: { token?: string | null; fallback?: boolean },
 ): Promise<RecaptchaResult> {
-  void env;
-  void input;
-  throw new Error("TODO(PLAKY-INT-008): implement verifyRecaptcha");
+  if (!env.recaptchaSecretKey) {
+    return { ok: Boolean(input.fallback) };
+  }
+
+  if (!input.token) {
+    return { ok: false };
+  }
+
+  const body = new URLSearchParams({
+    secret: env.recaptchaSecretKey,
+    response: input.token,
+  });
+
+  const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  if (!response.ok) {
+    return { ok: false };
+  }
+
+  const payload = (await response.json()) as { success?: boolean; score?: number };
+  return {
+    ok: Boolean(payload.success),
+    score: typeof payload.score === "number" ? payload.score : undefined,
+  };
 }

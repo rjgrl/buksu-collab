@@ -22,14 +22,33 @@ export function useSession() {
 // Treat an undefined permission list as "no access" so the UI hides controls while the
 // session is still loading.
 export function can(permissions: string[] | undefined, permission: string) {
-  return permissions?.includes(permission) ?? false;
+  if (!permissions) {
+    return false;
+  }
+  return permissions.includes(permission);
 }
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-026 - implement postJson.
 // Contract: POST JSON with credentials included; on a non-2xx response throw an Error
 // carrying the server's `error` field so callers can show it verbatim in a toast.
 export async function postJson<T>(url: string, body: unknown) {
-  void url;
-  void body;
-  throw new Error("TODO(PLAKY-AUTH-026): implement postJson");
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  let payload: { error?: string } & T = {} as { error?: string } & T;
+  try {
+    payload = (await response.json()) as { error?: string } & T;
+  } catch {
+    // Non-JSON error bodies still become a generic failure below.
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed.");
+  }
+
+  return payload;
 }

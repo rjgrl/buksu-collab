@@ -34,7 +34,22 @@ function envString(key: string) {
  * IntegrationEnv (packages/api/src/context.ts) and in apps/server/.env.schema.
  */
 export function readIntegrationEnv(): IntegrationEnv {
-  throw new Error("TODO(PLAKY-INT-015): implement readIntegrationEnv");
+  return {
+    recaptchaSecretKey: envString("RECAPTCHA_SECRET_KEY"),
+    recaptchaSiteKey: envString("RECAPTCHA_SITE_KEY"),
+    googleClientId: envString("GOOGLE_CLIENT_ID"),
+    googleClientSecret: envString("GOOGLE_CLIENT_SECRET"),
+    googleServiceAccountJson: envString("GOOGLE_SERVICE_ACCOUNT_JSON"),
+    googleDriveFolderId: envString("GOOGLE_DRIVE_FOLDER_ID"),
+    googleSheetsSpreadsheetId: envString("GOOGLE_SHEETS_SPREADSHEET_ID"),
+    googleFormsWebhookSecret: envString("GOOGLE_FORMS_WEBHOOK_SECRET"),
+    smtpUrl: envString("SMTP_URL"),
+    smtpFrom: envString("SMTP_FROM"),
+    imgbbApiKey: envString("IMGBB_API_KEY"),
+    imageHostProvider: envString("IMAGE_HOST_PROVIDER"),
+    uploadDir: envString("UPLOAD_DIR"),
+    appUrl: envString("APP_URL"),
+  };
 }
 
 /**
@@ -43,9 +58,15 @@ export function readIntegrationEnv(): IntegrationEnv {
  * TODO(PLAKY-AUTH): PLAKY-AUTH-017 - implement token extraction.
  */
 export function readSessionToken(c: HonoContext) {
-  void getCookie;
-  void c;
-  throw new Error("TODO(PLAKY-AUTH-017): implement readSessionToken");
+  const authorization = c.req.header("authorization");
+  if (authorization?.toLowerCase().startsWith("bearer ")) {
+    const token = authorization.slice(7).trim();
+    if (token) {
+      return token;
+    }
+  }
+
+  return getCookie(c, SESSION_COOKIE) ?? null;
 }
 
 /**
@@ -54,11 +75,20 @@ export function readSessionToken(c: HonoContext) {
  * TODO(PLAKY-AUTH): PLAKY-AUTH-018 - implement createContext.
  */
 export async function createContext(options: CreateContextOptions): Promise<ApiContext> {
-  void envString;
-  void loadAuthUserFromToken;
-  void db;
-  void options;
-  throw new Error("TODO(PLAKY-AUTH-018): implement createContext");
+  const c = options.context;
+  const sessionToken = readSessionToken(c);
+  const user = await loadAuthUserFromToken(db, sessionToken);
+  const forwarded = c.req.header("x-forwarded-for");
+  const ipAddress = forwarded?.split(",")[0]?.trim() || c.req.header("x-real-ip") || null;
+
+  return {
+    db,
+    sessionToken,
+    user,
+    ipAddress,
+    userAgent: c.req.header("user-agent") ?? null,
+    integrationEnv: readIntegrationEnv(),
+  };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
