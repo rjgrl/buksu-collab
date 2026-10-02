@@ -18,12 +18,13 @@ import {
 } from "@Alumni-Tracking-Ss/api/server-utils";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
-import { onError } from "@orpc/server";
+import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { withNotDeleted } from "@Alumni-Tracking-Ss/db";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import type { Context as HonoContext } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -70,17 +71,74 @@ app.use(
 // TODO(PLAKY-AUTH): PLAKY-AUTH-019 - implement cookieOptions and reuse it for every
 // setCookie call so login, signup, and the Google callback cannot drift apart.
 function cookieOptions(expiresAt: Date) {
-  void expiresAt;
-  void isProduction;
-  throw new Error("TODO(PLAKY-AUTH-019): implement cookieOptions");
+  return {
+    httpOnly: true,
+    path: "/",
+    sameSite: "Lax" as const,
+    secure: isProduction,
+    expires: expiresAt,
+  };
+}
+
+function clientMeta(c: HonoContext) {
+  const forwarded = c.req.header("x-forwarded-for");
+  const ipAddress = forwarded?.split(",")[0]?.trim() || c.req.header("x-real-ip") || null;
+  return {
+    ipAddress,
+    userAgent: c.req.header("user-agent") ?? null,
+  };
+}
+
+function orpcStatus(code: string): number {
+  switch (code) {
+    case "BAD_REQUEST":
+      return 400;
+    case "UNAUTHORIZED":
+      return 401;
+    case "FORBIDDEN":
+      return 403;
+    case "NOT_FOUND":
+      return 404;
+    case "CONFLICT":
+      return 409;
+    default:
+      return 500;
+  }
+}
+
+function authErrorResponse(c: HonoContext, error: unknown, fallbackStatus = 400) {
+  if (error instanceof ORPCError) {
+    return c.json({ error: error.message }, orpcStatus(error.code));
+  }
+  if (error instanceof Error) {
+    return c.json({ error: error.message }, fallbackStatus);
+  }
+  return c.json({ error: "Request failed." }, fallbackStatus);
+}
+
+async function gateRecaptcha(
+  c: HonoContext,
+  body: { recaptchaToken?: string; recaptchaFallback?: boolean },
+) {
+  if (!(await isIntegrationEnabled(db, "recaptcha"))) {
+    return;
+  }
+
+  const env = readIntegrationEnv();
+  const live = Boolean(env.recaptchaSecretKey);
+  const result = await verifyRecaptcha(env, {
+    token: body.recaptchaToken,
+    fallback: !live && Boolean(body.recaptchaFallback),
+  });
+
+  if (!result.ok) {
+    throw new ORPCError("BAD_REQUEST", { message: "reCAPTCHA verification failed." });
+  }
 }
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-020 - implement currentUser for the raw file routes.
 async function currentUser(c: Parameters<typeof readSessionToken>[0]) {
-  void loadAuthUserFromToken;
-  void db;
-  void c;
-  throw new Error("TODO(PLAKY-AUTH-020): implement currentUser");
+  return loadAuthUserFromToken(db, readSessionToken(c));
 }
 
 /** OpenAPI handler with a generated reference document, served under /api-reference. */
@@ -112,48 +170,119 @@ export const rpcHandler = new RPCHandler(appRouter, {
 // (400 on failure), authenticate, create a session, set the session cookie, return the
 // AuthUser. Invalid credentials answer 401.
 app.post("/api/auth/login", async (c) => {
-  void authenticateWithPassword;
-  void createSession;
-  void isIntegrationEnabled;
-  void loadAuthUser;
-  void readIntegrationEnv;
-  void setCookie;
-  void SESSION_COOKIE;
-  void cookieOptions;
-  throw new Error("TODO(PLAKY-AUTH-021): implement POST /api/auth/login");
+  try {
+    const body = await c.req.json<{
+      email?: string;
+      password?: string;
+      recaptchaToken?: string;
+      recaptchaFallback?: boolean;
+    }>();
+
+    if (!body.email || !body.password) {
+      return c.json({ error: "Email and password are required." }, 400);
+    }
+
+    await gateRecaptcha(c, body);
+
+    const meta = clientMeta(c);
+    const account = await authenticateWithPassword(db, {
+      email: body.email,
+      password: body.password,
+      ipAddress: meta.ipAddress,
+    });
+
+    const session = await createSession(db, account.id, meta);
+    setCookie(c, SESSION_COOKIE, session.token, cookieOptions(session.expiresAt));
+
+    const user = await loadAuthUser(db, account.id);
+    return c.json({ user });
+  } catch (error) {
+    return authErrorResponse(c, error, 401);
+  }
 });
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-022 - implement self-registration. Same reCAPTCHA gate as
 // login; failures answer 400 (as opposed to 401 for login).
 app.post("/api/auth/signup", async (c) => {
-  void registerUser;
-  void createSession;
-  void isIntegrationEnabled;
-  void loadAuthUser;
-  void readIntegrationEnv;
-  void setCookie;
-  void SESSION_COOKIE;
-  void cookieOptions;
-  throw new Error("TODO(PLAKY-AUTH-022): implement POST /api/auth/signup");
+  try {
+    const body = await c.req.json<{
+      name?: string;
+      email?: string;
+      password?: string;
+      recaptchaToken?: string;
+      recaptchaFallback?: boolean;
+    }>();
+
+    if (!body.name || !body.email || !body.password) {
+      return c.json({ error: "Name, email, and password are required." }, 400);
+    }
+
+    await gateRecaptcha(c, body);
+
+    const meta = clientMeta(c);
+    const account = await registerUser(db, {
+      name: body.name,
+      email: body.email,
+      password: body.password,
+      ipAddress: meta.ipAddress,
+    });
+
+    const session = await createSession(db, account.id, meta);
+    setCookie(c, SESSION_COOKIE, session.token, cookieOptions(session.expiresAt));
+
+    const user = await loadAuthUser(db, account.id);
+    return c.json({ user });
+  } catch (error) {
+    return authErrorResponse(c, error, 400);
+  }
 });
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-023 - implement sign-out: destroy the session, clear the
 // cookie, return { ok: true }.
 app.post("/api/auth/logout", async (c) => {
-  void destroySession;
-  void deleteCookie;
-  void SESSION_COOKIE;
-  void c;
-  throw new Error("TODO(PLAKY-AUTH-023): implement POST /api/auth/logout");
+  const token = readSessionToken(c);
+  const user = await loadAuthUserFromToken(db, token);
+  await destroySession(db, token);
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+
+  if (user) {
+    await writeAudit(db, {
+      actorId: user.id,
+      action: "auth.logout",
+      entity: "user",
+      entityId: user.id,
+      summary: `${user.email} signed out`,
+      ipAddress: clientMeta(c).ipAddress,
+    });
+  }
+
+  return c.json({ ok: true });
 });
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-024 - implement the Google OAuth start: redirect to
 // accounts.google.com with openid/email/profile scopes and prompt=select_account.
 // Answer 400 when the module is disabled or its credentials are missing.
 app.get("/api/auth/google", async (c) => {
-  void isIntegrationEnabled;
-  void readIntegrationEnv;
-  throw new Error("TODO(PLAKY-AUTH-024): implement GET /api/auth/google");
+  if (!(await isIntegrationEnabled(db, "google_auth"))) {
+    return c.json({ error: "Google sign-in is disabled." }, 400);
+  }
+
+  const env = readIntegrationEnv();
+  if (!env.googleClientId || !env.googleClientSecret || !env.appUrl) {
+    return c.json({ error: "Google sign-in is not configured." }, 400);
+  }
+
+  const redirectUri = `${env.appUrl.replace(/\/$/, "")}/api/auth/google/callback`;
+  const params = new URLSearchParams({
+    client_id: env.googleClientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    access_type: "online",
+  });
+
+  return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 });
 
 // TODO(PLAKY-AUTH): PLAKY-AUTH-025 - implement the Google OAuth callback: exchange the code
@@ -161,15 +290,88 @@ app.get("/api/auth/google", async (c) => {
 // auth.google audit entry, then redirect to /dashboard. Every failure redirects to
 // /login?error=google rather than leaking an error page.
 app.get("/api/auth/google/callback", async (c) => {
-  void upsertGoogleUser;
-  void createSession;
-  void loadAuthUser;
-  void setCookie;
-  void cookieOptions;
-  void writeAudit;
-  void readIntegrationEnv;
-  void SESSION_COOKIE;
-  throw new Error("TODO(PLAKY-AUTH-025): implement GET /api/auth/google/callback");
+  const env = readIntegrationEnv();
+  const apiBase = (env.appUrl ?? ENV.APP_URL).replace(/\/$/, "");
+  const webBase = ENV.CORS_ORIGIN.replace(/\/$/, "");
+  const fail = () => c.redirect(`${webBase}/login?error=google`);
+
+  try {
+    if (!(await isIntegrationEnabled(db, "google_auth"))) {
+      return fail();
+    }
+
+    if (!env.googleClientId || !env.googleClientSecret) {
+      return fail();
+    }
+
+    const code = c.req.query("code");
+    if (!code) {
+      return fail();
+    }
+
+    const redirectUri = `${apiBase}/api/auth/google/callback`;
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: env.googleClientId,
+        client_secret: env.googleClientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      return fail();
+    }
+
+    const tokens = (await tokenResponse.json()) as { access_token?: string };
+    if (!tokens.access_token) {
+      return fail();
+    }
+
+    const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+
+    if (!profileResponse.ok) {
+      return fail();
+    }
+
+    const profile = (await profileResponse.json()) as {
+      email?: string;
+      name?: string;
+      picture?: string;
+    };
+
+    if (!profile.email) {
+      return fail();
+    }
+
+    const account = await upsertGoogleUser(db, {
+      email: profile.email,
+      name: profile.name ?? profile.email,
+      image: profile.picture ?? null,
+    });
+
+    const meta = clientMeta(c);
+    const session = await createSession(db, account.id, meta);
+    setCookie(c, SESSION_COOKIE, session.token, cookieOptions(session.expiresAt));
+
+    await writeAudit(db, {
+      actorId: account.id,
+      action: "auth.google",
+      entity: "user",
+      entityId: account.id,
+      summary: `${account.email} signed in with Google`,
+      ipAddress: meta.ipAddress,
+    });
+
+    return c.redirect(`${webBase}/dashboard`);
+  } catch {
+    return fail();
+  }
 });
 
 // TODO(PLAKY-FILES): PLAKY-FILE-001 - implement multipart evidence upload.
