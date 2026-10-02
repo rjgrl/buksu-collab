@@ -1,9 +1,8 @@
 import type { Database } from "@Alumni-Tracking-Ss/db";
 import type { PermissionKey } from "@Alumni-Tracking-Ss/db";
 
-// TODO(PLAKY-AUDIT): PLAKY-AUD-001 - implement the audit write.
-// Contract: one AuditLog row per mutation, with actorId, action, entity, entityId,
-// human-readable summary, optional JSON metadata, and the caller IP.
+// One AuditLog row per mutation, with actorId, action, entity, entityId,
+// a human-readable summary, optional JSON metadata, and the caller IP.
 // Every write procedure in packages/api/src/routers/* must call this.
 
 // The Prisma client types the JSON column as an index-signature input, so a
@@ -27,22 +26,28 @@ export async function writeAudit(
     ipAddress?: string | null;
   },
 ) {
-  if (!input.action || !input.entity) {
+  // A missing entity is a caller bug, not a failed mutation. Skip the write instead of
+  // throwing into the request path.
+  if (!input.entity.trim()) {
     return;
   }
+
+  // JSON round-trip drops undefined values and narrows the payload to plain JSON.
+  const metadata =
+    input.metadata == null
+      ? undefined
+      : (JSON.parse(JSON.stringify(input.metadata)) as AuditLogMetadata);
 
   try {
     await db.auditLog.create({
       data: {
-        actorId: input.actorId ?? null,
+        actorId: input.actorId || null,
         action: input.action,
         entity: input.entity,
-        entityId: input.entityId ?? null,
+        entityId: input.entityId || null,
         summary: input.summary ?? "",
-        metadata: input.metadata === null || input.metadata === undefined
-          ? undefined
-          : (input.metadata as AuditLogMetadata),
-        ipAddress: input.ipAddress ?? null,
+        metadata,
+        ipAddress: input.ipAddress || null,
       },
     });
   } catch {
