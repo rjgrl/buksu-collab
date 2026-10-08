@@ -247,6 +247,11 @@ TypeError: Cannot read properties of undefined (reading 'includes')
 
 **Fix:** Added `packages/db/src/replica-setup.mjs` + `pnpm run db:replica-setup`. It checks whether `rs0` is already active and initiates it only when needed. Safe to re-run.
 
+  - **Path discovery** — queries `sc qc <service>` to find the real `mongod.exe` and config paths instead of relying on hardcoded locations that differ across installs (e.g. `Server\8.3\bin` vs `MongoDB\bin` vs `Community\7.0\bin`).
+  - **Config mutation** — edits the YAML config file to add `replication.replSetName: rs0` (uncommenting `#replication:`, updating an existing section, or appending a new one), then restarts via `net stop` / `net start`. This persists across reboots and avoids the `spawnSync` blocking issue.
+  - **mongosh discovery** — `mongosh` is commonly installed separately from `mongod` (e.g. `AppData\Local\Programs\mongosh`), so the script searches the derived bin dir, the standalone install path, and `where` before falling back.
+  - **Error handling** — checks `spawnSync` `r.error` (ENOENT when the executable isn't found), sets timeouts on all subprocess calls, and gracefully treats "already initiated" as a non-fatal condition.
+
 **Updated clone workflow:**
 ```bash
 pnpm install
