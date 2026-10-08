@@ -239,6 +239,34 @@ TypeError: Cannot read properties of undefined (reading 'includes')
 
 ---
 
+## MongoDB Replica Set Setup (2026-10-08)
+
+**Symptom:** On a fresh machine, `db:seed` fails with `P2031` — "Prisma needs to perform transactions, which requires your MongoDB server to be run as a replica set."
+
+**Root cause:** Prisma's `upsert` (used throughout `seed.ts`) requires MongoDB transactions, which need a replica set. A default `mongod` install is **not** a replica set. This machine already had `rs0` configured, so it was invisible until the other device hit the error.
+
+**Fix:** Added `packages/db/src/replica-setup.mjs` + `pnpm run db:replica-setup`. It checks whether `rs0` is already active and initiates it only when needed. Safe to re-run.
+
+**Updated clone workflow:**
+```bash
+pnpm install
+pnpm run env:setup
+pnpm run db:replica-setup   # <- new: ensures MongoDB is a replica set
+pnpm run db:generate
+pnpm run db:push
+pnpm run db:seed
+pnpm run dev
+```
+
+**Files:**
+- `packages/db/src/replica-setup.mjs` — new, idempotent replica set initializer
+- `packages/db/package.json` — added `db:replica-setup` script
+- `package.json` — added `db:replica-setup` workspace alias
+- `README.md` — added `db:replica-setup` to getting-started
+- `scripts/setup-env.mjs` — added replica set note to output
+
+---
+
 ## Docs Fix: Seeded Super Admin Password (2026-10-08)
 
 **Problem:** `README.md` documented the seeded admin password as `AlumniAdmin123!`, but the actual seed (`packages/db/src/seed.ts:92`) and the login screen (`apps/web/src/routes/login.tsx:248`) both use `Admin123!`. A fresh clone following the README could never log in.
