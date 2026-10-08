@@ -8,6 +8,7 @@ Stack: React, TanStack Router, Hono, oRPC, Prisma, MongoDB.
 
 ```bash
 pnpm install
+pnpm run env:setup
 pnpm run db:generate
 pnpm run db:push
 pnpm run db:seed
@@ -19,7 +20,9 @@ pnpm run dev
 
 Seeded Super Admin: `admin@alumni.local` / `AlumniAdmin123!`
 
-`DATABASE_URL` must include a MongoDB database name, for example `...mongodb.net/alumni_tracking?...`.
+`pnpm run env:setup` auto-generates the local `.env` files (it skips any that already exist).
+`DATABASE_URL` defaults to a local MongoDB (`mongodb://127.0.0.1:27017/alumni_tracking`).
+To use a remote database, edit the generated `packages/db/.env` and `apps/server/.env`.
 
 See [docs/system/installation.md](docs/system/installation.md) and [docs/implementation.md](docs/implementation.md).
 

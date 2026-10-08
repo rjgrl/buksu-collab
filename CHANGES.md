@@ -192,3 +192,26 @@ pnpm check-types
 # 5 errors (all pre-existing in integrations/files.ts and forms.ts)
 # No errors in ALM/AD/STF implementation files
 ```
+
+---
+
+## Setup Automation (2026-10-08)
+
+**Problem:** `.env` files are gitignored, so a fresh clone had no `DATABASE_URL` and `pnpm run db:generate` failed with "Value is required but is currently empty". Users had to manually create three files.
+
+**Fix:** Added `scripts/setup-env.mjs` + `pnpm run env:setup`. It writes the three required `.env` files with local defaults (`mongodb://127.0.0.1:27017/alumni_tracking`), skipping any that already exist.
+
+**Updated clone workflow:**
+```bash
+pnpm install
+pnpm run env:setup
+pnpm run db:generate
+pnpm run db:push
+pnpm run db:seed
+pnpm run dev
+```
+
+**Files:**
+- `scripts/setup-env.mjs` — new, generates `.env` files (idempotent, skips existing)
+- `package.json` — added `"env:setup"` script
+- `README.md` — updated getting-started section
