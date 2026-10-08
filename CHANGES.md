@@ -218,6 +218,27 @@ pnpm run dev
 
 ---
 
+## Login Fix: varlock working-directory requirement (2026-10-08)
+
+**Symptom:** `db:seed` ran, but `admin@alumni.local` / `Admin123!` returned "Invalid email or password" on the other device.
+
+**Investigation:** The seed and password verification are correct (verified directly against MongoDB — `verifyPassword("Admin123!", hash)` returns `true`, user has role `super_admin`). The real blocker was upstream: the server crashed on CORS before login could run:
+
+```
+TypeError: Cannot read properties of undefined (reading 'includes')
+  at hono/dist/middleware/cors/index.js:64:38
+```
+
+**Root cause:** `varlock/auto-load` resolves `.env` from the **current working directory**, not the file location. Starting the server with `npx tsx apps/server/src/index.ts` from the repo root leaves `ENV.CORS_ORIGIN` undefined, so every request (including login) 500s.
+
+**Fix:** Documented the constraint — always start the server via `pnpm run dev` or `pnpm run dev:server`, which use `vp run` and `cd` into `apps/server`. Verified login returns 200 OK with the super admin user.
+
+**Files:**
+- `README.md` — added working-directory warning
+- `scripts/setup-env.mjs` — added startup hint
+
+---
+
 ## Docs Fix: Seeded Super Admin Password (2026-10-08)
 
 **Problem:** `README.md` documented the seeded admin password as `AlumniAdmin123!`, but the actual seed (`packages/db/src/seed.ts:92`) and the login screen (`apps/web/src/routes/login.tsx:248`) both use `Admin123!`. A fresh clone following the README could never log in.

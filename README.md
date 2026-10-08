@@ -24,6 +24,12 @@ Seeded Super Admin: `admin@alumni.local` / `Admin123!`
 `DATABASE_URL` defaults to a local MongoDB (`mongodb://127.0.0.1:27017/alumni_tracking`).
 To use a remote database, edit the generated `packages/db/.env` and `apps/server/.env`.
 
+⚠️ The server reads env via `varlock/auto-load`, which resolves `.env` from the
+**current working directory**. Always start the server through `pnpm run dev` or
+`pnpm run dev:server` (these `cd` into `apps/server`). Running
+`npx tsx apps/server/src/index.ts` from the repo root leaves `ENV.CORS_ORIGIN`
+undefined and crashes the CORS middleware before login can run.
+
 See [docs/system/installation.md](docs/system/installation.md) and [docs/implementation.md](docs/implementation.md).
 
 ## Project structure
