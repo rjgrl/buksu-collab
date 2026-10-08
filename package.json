@@ -23,6 +23,7 @@
     "db:migrate": "vp run --filter @Alumni-Tracking-Ss/db db:migrate",
     "db:seed": "vp run --filter @Alumni-Tracking-Ss/db db:seed",
     "test": "tsx --test packages/db/src/*.test.ts packages/api/src/**/*.test.ts",
+    "env:setup": "node scripts/setup-env.mjs",
     "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
     "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/"
   },
