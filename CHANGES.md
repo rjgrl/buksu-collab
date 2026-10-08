@@ -250,7 +250,8 @@ TypeError: Cannot read properties of undefined (reading 'includes')
   - **Path discovery** — queries `sc qc <service>` to find the real `mongod.exe` and config paths instead of relying on hardcoded locations that differ across installs (e.g. `Server\8.3\bin` vs `MongoDB\bin` vs `Community\7.0\bin`).
   - **Config mutation** — edits the YAML config file to add `replication.replSetName: rs0` (uncommenting `#replication:`, updating an existing section, or appending a new one), then restarts via `net stop` / `net start`. This persists across reboots and avoids the `spawnSync` blocking issue.
   - **mongosh discovery** — `mongosh` is commonly installed separately from `mongod` (e.g. `AppData\Local\Programs\mongosh`), so the script searches the derived bin dir, the standalone install path, and `where` before falling back.
-  - **Error handling** — checks `spawnSync` `r.error` (ENOENT when the executable isn't found), sets timeouts on all subprocess calls, and gracefully treats "already initiated" as a non-fatal condition.
+  - **Error handling** — checks `spawnSync` `r.error` (ENOENT when the executable isn't found), sets timeouts on all subprocess calls, gracefully treats "already initiated" as a non-fatal condition, and catches EPERM with a message about running as Administrator.
+  - **Admin detection** — uses `net session` to detect non-elevated shells and warns before attempting config mutation or service restart, which require Administrator privileges on Windows.
 
 **Updated clone workflow:**
 ```bash
