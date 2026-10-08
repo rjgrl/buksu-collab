@@ -39,5 +39,14 @@ for (const [rel, content] of Object.entries(files)) {
 }
 
 console.log(`\nDone. Created ${created} file(s).`);
-console.log("Edit DATABASE_URL if you use a remote MongoDB, then run:");
-console.log("  pnpm run db:generate && pnpm run db:push && pnpm run db:seed && pnpm run dev");
+console.log("Then run (in this order):");
+console.log("  pnpm run db:generate");
+console.log("  pnpm run db:push");
+console.log("  pnpm run db:seed");
+console.log("  pnpm run dev");
+console.log("");
+console.log("⚠ varlock/auto-load resolves .env from the current working directory.");
+console.log("  Always start the server via `pnpm run dev` or `pnpm run dev:server`");
+console.log("  (these cd into apps/server). Do NOT run `npx tsx apps/server/src/index.ts`");
+console.log("  from the repo root — ENV.CORS_ORIGIN will be undefined and the");
+console.log("  CORS middleware crashes before login can run.");
