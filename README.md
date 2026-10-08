@@ -18,7 +18,7 @@ pnpm run dev
 - Web: http://localhost:3001
 - API: http://localhost:3000
 
-Seeded Super Admin: `admin@alumni.local` / `AlumniAdmin123!`
+Seeded Super Admin: `admin@alumni.local` / `Admin123!`
 
 `pnpm run env:setup` auto-generates the local `.env` files (it skips any that already exist).
 `DATABASE_URL` defaults to a local MongoDB (`mongodb://127.0.0.1:27017/alumni_tracking`).

@@ -215,3 +215,14 @@ pnpm run dev
 - `scripts/setup-env.mjs` — new, generates `.env` files (idempotent, skips existing)
 - `package.json` — added `"env:setup"` script
 - `README.md` — updated getting-started section
+
+---
+
+## Docs Fix: Seeded Super Admin Password (2026-10-08)
+
+**Problem:** `README.md` documented the seeded admin password as `AlumniAdmin123!`, but the actual seed (`packages/db/src/seed.ts:92`) and the login screen (`apps/web/src/routes/login.tsx:248`) both use `Admin123!`. A fresh clone following the README could never log in.
+
+**Fix:** Corrected `README.md` to `admin@alumni.local` / `Admin123!` so all three sources agree.
+
+**Files:**
+- `README.md` — corrected seeded admin password
