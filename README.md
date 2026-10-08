@@ -9,6 +9,7 @@ Stack: React, TanStack Router, Hono, oRPC, Prisma, MongoDB.
 ```bash
 pnpm install
 pnpm run env:setup
+pnpm run db:replica-setup
 pnpm run db:generate
 pnpm run db:push
 pnpm run db:seed

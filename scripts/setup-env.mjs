@@ -40,6 +40,7 @@ for (const [rel, content] of Object.entries(files)) {
 
 console.log(`\nDone. Created ${created} file(s).`);
 console.log("Then run (in this order):");
+console.log("  pnpm run db:replica-setup   # <- MongoDB needs a replica set for Prisma upsert");
 console.log("  pnpm run db:generate");
 console.log("  pnpm run db:push");
 console.log("  pnpm run db:seed");
@@ -50,3 +51,7 @@ console.log("  Always start the server via `pnpm run dev` or `pnpm run dev:serve
 console.log("  (these cd into apps/server). Do NOT run `npx tsx apps/server/src/index.ts`");
 console.log("  from the repo root — ENV.CORS_ORIGIN will be undefined and the");
 console.log("  CORS middleware crashes before login can run.");
+console.log("");
+console.log("⚠ Prisma's upsert (used by db:seed) requires MongoDB transactions, which");
+console.log("  need a replica set. If db:seed fails with P2031, run `pnpm run db:replica-setup`.");
+console.log("  If mongod was started without --replSet, restart it with --replSet rs0 first.");
