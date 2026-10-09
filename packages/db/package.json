@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@Alumni-Tracking-Ss/config": "workspace:*",
+    "@types/node": "catalog:",
     "prisma": "6.19.3",
     "tsx": "^4.23.13",
     "typescript": "catalog:",

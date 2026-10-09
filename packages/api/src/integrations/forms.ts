@@ -1,6 +1,4 @@
-import type { IntegrationEnv } from "../context";
 import type { AlumniImportRow } from "../validation";
-import { alumniImportRowSchema } from "../validation";
 
 // Google Forms ingestion.
 //
@@ -12,24 +10,22 @@ import { alumniImportRowSchema } from "../validation";
 // Contract: build a candidate object from the alias lists below and hand it to
 // alumniImportRowSchema.parse() so a malformed submission is rejected with BAD_REQUEST by
 // the caller rather than partially imported.
-export function mapFormPayload(payload: Record<string, unknown>): AlumniImportRow {
-  void payload;
-  void lowerKeys;
-  void pick;
-  void alumniImportRowSchema;
+export function mapFormPayload(_payload: Record<string, unknown>): AlumniImportRow {
   throw new Error("TODO(PLAKY-INT-009): implement mapFormPayload");
 }
 
 // TODO(PLAKY-INT-009 - strip every non-alphanumeric character and lowercase the key so
 // "Student Number", "student_number", and "Student#Number" all collapse to one lookup key.
-function lowerKeys(payload: Record<string, unknown>) {
+function _lowerKeys(_payload: Record<string, unknown>) {
   throw new Error("TODO(PLAKY-INT-009): implement lowerKeys");
 }
+void _lowerKeys;
 
 // TODO(PLAKY-INT-009 - return the first non-empty value among the candidate keys.
-function pick(source: Record<string, unknown>, keys: string[]) {
+function _pick(_source: Record<string, unknown>, _keys: string[]) {
   throw new Error("TODO(PLAKY-INT-009): implement pick");
 }
+void _pick;
 
 /**
  * Accepted form question titles per alumni field. Keep in sync with

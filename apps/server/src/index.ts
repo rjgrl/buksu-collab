@@ -89,7 +89,7 @@ function clientMeta(c: HonoContext) {
   };
 }
 
-function orpcStatus(code: string): number {
+function orpcStatus(code: string): 400 | 401 | 403 | 404 | 409 | 500 {
   switch (code) {
     case "BAD_REQUEST":
       return 400;
@@ -106,7 +106,7 @@ function orpcStatus(code: string): number {
   }
 }
 
-function authErrorResponse(c: HonoContext, error: unknown, fallbackStatus = 400) {
+function authErrorResponse(c: HonoContext, error: unknown, fallbackStatus: 400 | 401 | 403 | 404 | 409 | 500 = 400) {
   if (error instanceof ORPCError) {
     return c.json({ error: error.message }, orpcStatus(error.code));
   }
@@ -117,7 +117,7 @@ function authErrorResponse(c: HonoContext, error: unknown, fallbackStatus = 400)
 }
 
 async function gateRecaptcha(
-  c: HonoContext,
+  _c: HonoContext,
   body: { recaptchaToken?: string; recaptchaFallback?: boolean },
 ) {
   if (!(await isIntegrationEnabled(db, "recaptcha"))) {
@@ -380,7 +380,7 @@ app.get("/api/auth/google/callback", async (c) => {
 // ALLOWED_EVIDENCE_TYPES and anything over MAX_EVIDENCE_BYTES (400), verify the alumni
 // record exists and is not soft-deleted (404), store through storeFile(), create the
 // EvidenceFile, mirror an image upload onto Alumni.photoUrl, then write an audit entry.
-app.post("/api/files/evidence", async (c) => {
+app.post("/api/files/evidence", async (_c) => {
   void currentUser;
   void ALLOWED_EVIDENCE_TYPES;
   void MAX_EVIDENCE_BYTES;
@@ -389,7 +389,6 @@ app.post("/api/files/evidence", async (c) => {
   void storeFile;
   void readIntegrationEnv;
   void writeAudit;
-  void c;
   throw new Error("TODO(PLAKY-FILE-001): implement POST /api/files/evidence");
 });
 
@@ -397,12 +396,11 @@ app.post("/api/files/evidence", async (c) => {
 // non-deleted EvidenceFile (404 when missing), redirect to evidence.url when present,
 // stream from local disk when provider is `local`, and answer 404 for a remote provider
 // whose url is gone.
-app.get("/api/files/:id", async (c) => {
+app.get("/api/files/:id", async (_c) => {
   void currentUser;
   void withNotDeleted;
   void db;
   void readIntegrationEnv;
-  void c;
   throw new Error("TODO(PLAKY-FILE-002): implement GET /api/files/:id");
 });
 
@@ -410,13 +408,12 @@ app.get("/api/files/:id", async (c) => {
 // (403), verify the x-webhook-secret header (401; mandatory in production), map the payload
 // through mapFormPayload, import the single row with isTracked forced true, and record an
 // ImportJob with source "google_forms".
-app.post("/api/integrations/google-forms/webhook", async (c) => {
+app.post("/api/integrations/google-forms/webhook", async (_c) => {
   void isIntegrationEnabled;
   void readIntegrationEnv;
   void mapFormPayload;
   void importAlumniRows;
   void db;
-  void c;
   throw new Error("TODO(PLAKY-INT-009): implement the Google Forms webhook");
 });
 

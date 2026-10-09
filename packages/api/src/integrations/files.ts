@@ -31,15 +31,18 @@ export async function storeFile(
   throw new Error("TODO(PLAKY-FILE-003): implement storeFile");
 }
 
-// TODO(PLAKY-FILE-003 - write the buffer under env.uploadDir (default ./uploads) using a
+// TODO(PLAKY-FILE_003 - write the buffer under env.uploadDir (default ./uploads) using a
 // `${Date.now()}-${randomUUID()}-${sanitisedName}` key so filenames can never collide or
 // escape the directory. Returns provider "local" with no url.
-async function storeLocal(
+async function _storeLocal(
   _env: IntegrationEnv,
   _input: { buffer: Buffer; originalName: string },
 ): Promise<StoredFile> {
+  void _env;
+  void _input;
   throw new Error("TODO(PLAKY-FILE-003): implement storeLocal");
 }
+void _storeLocal;
 
 // TODO(PLAKY-INTEGRATIONS): PLAKY-INT-011 - implement `uploadImgbb(apiKey, buffer, name)`:
 // multipart POST to https://api.imgbb.com/1/upload, mapping the response to a public URL.
